@@ -1,0 +1,266 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Serverless Hello World Python sample service
+
+Parameters:
+  ServiceName:
+    Type: String
+    Description: "Name of service"
+    Default: serverless-hello-world-py
+
+  ServiceEnv:
+    Type: String
+    Description: "Name of deployment environment"
+    Default: "prime"
+
+  LogLevel:
+    Type: String
+    Description: "Log level for functions; used internally in code."
+    Default: 'INFO'
+    AllowedValues:
+      - 'DEBUG'
+      - 'INFO'
+      - 'WARNING'
+      - 'ERROR'
+      - 'CRITICAL'
+
+  XRaySDKEnabled:
+    Type: String
+    Description: "AWS X-RAY SDK enabled"
+    Default: 'Disabled'
+    AllowedValues:
+      - 'Enabled'
+      - 'Disabled'
+
+  XRayTracingMode:
+    Type: String
+    Description: "AWS XRay tracing mode"
+    Default: PassThrough
+    AllowedValues:
+      - Active
+      - PassThrough
+
+
+Mappings:
+  XRaySDKEnabled:
+    Enabled:
+      Enabled: "true"
+    Disabled:
+      Enabled: "false"
+
+Globals:
+  Function:
+    Environment:
+      Variables:
+        LOG_LEVEL:
+          Ref: LogLevel
+        AWS_XRAY_SDK_ENABLED:
+          Fn::FindInMap:
+            - XRaySDKEnabled
+            - Ref: XRaySDKEnabled
+            - Enabled
+    Tags:
+      ServiceName: !Ref ServiceName
+      ServiceEnv: !Ref ServiceEnv
+    Tracing: !Ref XRayTracingMode
+
+
+Resources:
+  CreateMessageItem:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: "Put message item in DDB"
+      CodeUri: src/handlers/CreateMessageItem
+      Handler: function.handler
+      Runtime: python3.8
+      MemorySize: 128
+      Timeout: 3
+      Policies:
+        - Statement:
+          - Effect: "Allow"
+            Action:
+              - "ssm:GetParameter"
+            Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ServiceName}/${ServiceEnv}/*"
+        - Statement:
+          - Effect: "Allow"
+            Action:
+              - "dynamodb:PutItem"
+            Resource:
+              Fn::GetAtt:
+                - DynamoDBTable
+                - Arn
+      Environment:
+        Variables:
+          DDB_TABLE_NAME: !Ref DynamoDBTable
+      Events:
+        SnsTopic:
+          Type: SNS
+          Properties:
+            Topic: !Ref DDBItemTopic
+            FilterPolicy:
+              Function:
+                - CreateMessageItem
+
+  RetrieveMessageItem:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: "Get message item in DDB"
+      CodeUri: src/handlers/RetrieveMessageItem
+      Handler: function.handler
+      Runtime: python3.8
+      MemorySize: 128
+      Timeout: 3
+      Policies:
+        - Statement:
+          - Effect: "Allow"
+            Action:
+              - "ssm:GetParameter"
+            Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ServiceName}/${ServiceEnv}/*"
+        - Statement:
+          - Effect: "Allow"
+            Action:
+              - "dynamodb:GetItem"
+            Resource:
+              Fn::GetAtt:
+                - DynamoDBTable
+                - Arn
+      Environment:
+        Variables:
+          DDB_TABLE_NAME: !Ref DynamoDBTable
+      Events:
+        ApiGateway:
+          Type: Api
+          Properties:
+            Path: /message/{messageId}
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+
+  UpdateMessageItem:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: "Update message item in DDB"
+      CodeUri: src/handlers/UpdateMessageItem
+      Handler: function.handler
+      Runtime: python3.8
+      MemorySize: 128
+      Timeout: 3
+      Policies:
+        - Statement:
+          - Effect: "Allow"
+            Action:
+              - "ssm:GetParameter"
+            Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ServiceName}/${ServiceEnv}/*"
+        - Statement:
+          - Effect: "Allow"
+            Action:
+              - "dynamodb:UpdateItem"
+            Resource:
+              Fn::GetAtt:
+                - DynamoDBTable
+                - Arn
+      Environment:
+        Variables:
+          DDB_TABLE_NAME: !Ref DynamoDBTable
+      Events:
+        SnsTopic:
+          Type: SNS
+          Properties:
+            Topic: !Ref DDBItemTopic
+            FilterPolicy:
+              Function:
+                - UpdateMessageItem
+
+  DeleteMessageItem:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: "Delete message item in DDB"
+      CodeUri: src/handlers/DeleteMessageItem
+      Handler: function.handler
+      Runtime: python3.8
+      MemorySize: 128
+      Timeout: 3
+      Policies:
+        - Statement:
+          - Effect: "Allow"
+            Action:
+              - "ssm:GetParameter"
+            Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ServiceName}/${ServiceEnv}/*"
+        - Statement:
+          - Effect: "Allow"
+            Action:
+              - "dynamodb:DeleteItem"
+            Resource:
+              Fn::GetAtt:
+                - DynamoDBTable
+                - Arn
+      Environment:
+        Variables:
+          DDB_TABLE_NAME: !Ref DynamoDBTable
+      Events:
+        SnsTopic:
+          Type: SNS
+          Properties:
+            Topic: !Ref DDBItemTopic
+            FilterPolicy:
+              Function:
+                - DeleteMessageItem
+
+  ApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    # NOTE: Retain data by default
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: "pk"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "pk"
+          KeyType: "HASH"
+      BillingMode: "PAY_PER_REQUEST"
+      TimeToLiveSpecification:
+        AttributeName: "ttl"
+        Enabled: false
+
+  DDBItemTopic:
+    Type: AWS::SNS::Topic
+
+
+Outputs:
+  DDBItemTopic:
+    Description: "ARN of SNS Topic"
+    Value:
+      Ref: DDBItemTopic
+    Export:
+      Name:
+        Fn::Sub: "${AWS::StackName}-DDBPutItemTopic"
+
+  DynamoDBTableArn:
+    Description: "ARN of DynamoDB table"
+    Value:
+      Fn::GetAtt: DynamoDBTable.Arn
+    Export:
+      Name:
+        Fn::Sub: "${AWS::StackName}-DynamoDBTableArn"
+
+  DynamoDBTableName:
+    Description: "Name of DynamoDB table"
+    Value:
+      Ref: DynamoDBTable
+    Export:
+      Name:
+        Fn::Sub: "${AWS::StackName}-DynamoDBTableName"
+
+  RestApiUrl:
+    Description: "URL of REST API"
+    Value:
+      Fn::Sub: "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
+    Export:
+      Name:
+        Fn::Sub: "${AWS::StackName}-RestApiUrl"
+
