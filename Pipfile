@@ -8,8 +8,9 @@ python_version = "3.8"
 # FIXME: need to include src.common
 
 [packages]
-common = {editable = true, path = "src/common"}
+common = {editable = true,path = "src/common"}
 boto3 = "*"
+cfn-lint = "*"
 
 [dev-packages]
 flake8 = "*"
@@ -20,7 +21,7 @@ pytest-cov = "*"
 pytest-mock = "*"
 pytest-pylint = "*"
 tox = "*"
-boto3-stubs = { extras = [ "lambda", "dynamodb", "kinesis", "s3", "sns", "sqs", "ssm", "xray" ], version = "*"}
+boto3-stubs = {extras = [ "lambda", "dynamodb", "kinesis", "s3", "sns", "sqs", "ssm", "xray" ],version = "*"}
 
 [scripts]
 #install-lambda-functions = "pipenv install -r src/requirements.txt"

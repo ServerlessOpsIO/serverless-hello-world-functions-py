@@ -93,13 +93,12 @@ Resources:
         Variables:
           DDB_TABLE_NAME: !Ref DynamoDBTable
       Events:
-        SnsTopic:
-          Type: SNS
+        ApiGateway:
+          Type: Api
           Properties:
-            Topic: !Ref DDBItemTopic
-            FilterPolicy:
-              Function:
-                - CreateMessageItem
+            Path: /message
+            Method: POST
+            RestApiId: !Ref ApiGatewayApi
 
   RetrieveMessageItem:
     Type: AWS::Serverless::Function
@@ -131,7 +130,7 @@ Resources:
         ApiGateway:
           Type: Api
           Properties:
-            Path: /message/{messageId}
+            Path: /message/{message_id}
             Method: GET
             RestApiId: !Ref ApiGatewayApi
 
@@ -162,13 +161,12 @@ Resources:
         Variables:
           DDB_TABLE_NAME: !Ref DynamoDBTable
       Events:
-        SnsTopic:
-          Type: SNS
+        ApiGateway:
+          Type: Api
           Properties:
-            Topic: !Ref DDBItemTopic
-            FilterPolicy:
-              Function:
-                - UpdateMessageItem
+            Path: /message/{messageId}
+            Method: PUT
+            RestApiId: !Ref ApiGatewayApi
 
   DeleteMessageItem:
     Type: AWS::Serverless::Function
@@ -197,13 +195,13 @@ Resources:
         Variables:
           DDB_TABLE_NAME: !Ref DynamoDBTable
       Events:
-        SnsTopic:
-          Type: SNS
+        ApiGateway:
+          Type: Api
           Properties:
-            Topic: !Ref DDBItemTopic
-            FilterPolicy:
-              Function:
-                - DeleteMessageItem
+            Path: /message/{messageId}
+            Method: DELETE
+            RestApiId: !Ref ApiGatewayApi
+
 
   ApiGatewayApi:
     Type: AWS::Serverless::Api
@@ -227,19 +225,8 @@ Resources:
         AttributeName: "ttl"
         Enabled: false
 
-  DDBItemTopic:
-    Type: AWS::SNS::Topic
-
 
 Outputs:
-  DDBItemTopic:
-    Description: "ARN of SNS Topic"
-    Value:
-      Ref: DDBItemTopic
-    Export:
-      Name:
-        Fn::Sub: "${AWS::StackName}-DDBPutItemTopic"
-
   DynamoDBTableArn:
     Description: "ARN of DynamoDB table"
     Value:

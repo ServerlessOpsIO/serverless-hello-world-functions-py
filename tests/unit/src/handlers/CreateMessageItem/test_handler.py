@@ -1,7 +1,7 @@
 import json
 import pytest
 
-from src.handlers.CreateMessageItem import handler
+from src.handlers.CreateMessageItem.function import handler
 
 
 @pytest.fixture()

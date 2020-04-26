@@ -12,41 +12,39 @@ import boto3
 # package for this service.
 import common   # pylint: disable=unused-import
 
-log_level = os.environ.get('LOG_LEVEL', 'INFO')
-logging.root.setLevel(logging.getLevelName(log_level))
-_logger = logging.getLogger(__name__)
-
 DDB_TABLE_NAME = os.environ.get('DDB_TABLE_NAME')
 ddb_res = boto3.resource('dynamodb')
 ddb_table = ddb_res.Table(DDB_TABLE_NAME)
 
 
-def _put_ddb_item(item: dict) -> dict:
-    '''Put item into DDB'''
-    r = ddb_table.put_item(
-        Item=item
-    )
-    return r
-
-
 def _create_item(item: dict) -> dict:
     '''Transform item to put into DDB'''
     dt = datetime.utcnow()
-    dt_ttl = dt.replace(year=dt.year + 1)
     item['pk'] = str(uuid4())
+    item['sk'] = 'v0'
     item['timestamp'] = int(dt.timestamp())
-    item['ttl'] = int(dt_ttl.timestamp())
 
-    return _put_ddb_item(item)
+    ddb_table.put_item(
+        Item=item
+    )
+
+    return {'message_id': item['pk']}
 
 
 def handler(event, context):
     '''Function entry'''
-    _logger.debug('Event: {}'.format(json.dumps(event)))
-    message = json.loads(event['Records'][0]['Sns']['Message'])
+    message = json.loads(event.get('body'))
 
-    resp = _create_item(message)
+    message_id = _create_item(message)
 
-    _logger.debug('Response: {}'.format(json.dumps(resp)))
+    body = {
+        'success': True,
+        'message': message_id
+    }
+    resp = {
+        "statusCode": 200,
+        "body": json.dumps(body)
+    }
+
     return resp
 

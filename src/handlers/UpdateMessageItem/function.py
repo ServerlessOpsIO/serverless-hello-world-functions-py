@@ -10,26 +10,22 @@ import boto3
 # package for this service.
 import common   # pylint: disable=unused-import
 
-log_level = os.environ.get('LOG_LEVEL', 'INFO')
-logging.root.setLevel(logging.getLevelName(log_level))
-_logger = logging.getLogger(__name__)
-
 DDB_TABLE_NAME = os.environ.get('DDB_TABLE_NAME')
 ddb_res = boto3.resource('dynamodb')
 ddb_table = ddb_res.Table(DDB_TABLE_NAME)
 
 
-def _update_item(item: dict) -> dict:
+def _update_item(message_id: str, attrs: dict) -> dict:
     '''Update item in DDB'''
-    pk = item.pop('pk')
 
     attribute_updates = {}
-    for key in item.keys():
-        attribute_updates[key] = {'Action': 'PUT', 'Value': item.get(key)}
+    for key in attrs.keys():
+        attribute_updates[key] = {'Action': 'PUT', 'Value': attrs.get(key)}
 
     r = ddb_table.update_item(
         Key={
-            'pk': pk
+            'pk': message_id,
+            'sk': 'v0'
         },
         AttributeUpdates=attribute_updates
     )
@@ -38,11 +34,14 @@ def _update_item(item: dict) -> dict:
 
 def handler(event, context):
     '''Function entry'''
-    _logger.debug('Event: {}'.format(json.dumps(event)))
-    message = json.loads(event['Records'][0]['Sns']['Message'])
+    message_id = event['pathParameters']['messageId']
+    attr = json.loads(event.get('body'))
 
-    resp = _update_item(message)
+    r = _update_item(message_id, attr)
+    resp = {
+        "statusCode": 200,
+        "body": json.dumps({'success': True})
+    }
 
-    _logger.debug('Response: {}'.format(json.dumps(resp)))
     return resp
 

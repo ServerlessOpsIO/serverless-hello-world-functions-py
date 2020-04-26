@@ -10,20 +10,17 @@ import boto3
 # package for this service.
 import common   # pylint: disable=unused-import
 
-log_level = os.environ.get('LOG_LEVEL', 'INFO')
-logging.root.setLevel(logging.getLevelName(log_level))
-_logger = logging.getLogger(__name__)
-
 DDB_TABLE_NAME = os.environ.get('DDB_TABLE_NAME')
 ddb_res = boto3.resource('dynamodb')
 ddb_table = ddb_res.Table(DDB_TABLE_NAME)
 
 
-def _delete_item(item: dict) -> dict:
+def _delete_item(message_id: str) -> dict:
     '''Delete item in DDB'''
     r = ddb_table.delete_item(
         Key={
-            'pk': item.get('pk')
+            'pk': message_id,
+            'sk': 'v0'
         },
     )
     return r
@@ -31,11 +28,13 @@ def _delete_item(item: dict) -> dict:
 
 def handler(event, context):
     '''Function entry'''
-    _logger.debug('Event: {}'.format(json.dumps(event)))
-    message = json.loads(event['Records'][0]['Sns']['Message'])
+    message_id = event['pathParameters']['messageId']
 
-    resp = _delete_item(message)
+    r = _delete_item(message_id)
+    resp = {
+        "statusCode": 200,
+        "body": json.dumps({'success': True})
+    }
 
-    _logger.debug('Response: {}'.format(json.dumps(resp)))
     return resp
 
